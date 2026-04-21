@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GitRestore Studio - PWA & Repo Manager</title>
+    <title>GitRestore Studio - Mobile PWA Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Ace Editor -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.23.0/ace.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.23.0/ext-modelist.min.js"></script>
+    <!-- Marked for Markdown -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     <style>
         :root {
@@ -23,293 +25,278 @@
             overflow: hidden;
             height: 100vh;
             width: 100vw;
-            touch-action: manipulation;
+            touch-action: pan-x pan-y;
         }
         .sidebar { background-color: var(--gh-sidebar); border-right: 1px solid var(--gh-border); }
         .btn-primary { background-color: #238636; transition: background 0.2s; }
         .btn-primary:hover { background-color: #2ea043; }
         
-        .card { background-color: #161b22; border: 1px solid var(--gh-border); border-radius: 6px; }
+        .card { background-color: #161b22; border: 1px solid var(--gh-border); border-radius: 8px; }
         
-        #editor { width: 100%; flex: 1; border: 1px solid var(--gh-border); border-radius: 4px; min-height: 200px; }
+        #editor { width: 100%; flex: 1; border: 1px solid var(--gh-border); border-radius: 4px; }
         
+        /* Sidebar Mobile Overlay */
+        .sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 100;
+            display: none;
+            backdrop-filter: blur(2px);
+        }
+        .sidebar-overlay.active { display: block; }
+
+        .mobile-drawer {
+            position: fixed;
+            top: 0; left: -280px; bottom: 0;
+            width: 280px;
+            z-index: 101;
+            transition: left 0.3s ease;
+            box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+        }
+        .mobile-drawer.active { left: 0; }
+
+        /* Maximize State */
         .editor-maximized {
             position: fixed !important;
             top: 0; left: 0; right: 0; bottom: 0;
-            z-index: 9999;
+            z-index: 999;
             height: 100vh !important;
-            width: 100vw !important;
             background: var(--gh-dark);
             padding: 10px;
             display: flex;
             flex-direction: column;
         }
-        
-        .modal-overlay { background: rgba(0,0,0,0.85); backdrop-filter: blur(4px); }
-        .file-item:hover .file-actions { display: flex; }
-        
-        select, input, textarea { color-scheme: dark; }
 
         .diff-added { background-color: rgba(46, 160, 67, 0.15); color: #7ee787; border-left: 4px solid #2ea043; }
         .diff-removed { background-color: rgba(248, 81, 73, 0.15); color: #ffa198; border-left: 4px solid #f85149; }
-        .diff-line { padding: 2px 8px; border-bottom: 1px solid #30363d11; font-family: monospace; }
+        .diff-line { padding: 4px 8px; border-bottom: 1px solid #30363d22; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11px; }
         
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--gh-dark); }
-        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { background: #484f58; border-radius: 10px; }
 
-        .tab-active { border-bottom: 2px solid var(--gh-blue); color: var(--gh-blue); font-weight: 600; }
+        .tab-active { border-bottom: 2px solid var(--gh-blue); color: var(--gh-blue); font-weight: 700; }
         
-        .shimmer {
-            background: linear-gradient(90deg, #161b22 25%, #21262d 50%, #161b22 75%);
-            background-size: 200% 100%;
-            animation: shimmer 1.5s infinite;
-        }
-        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-
-        @media (max-width: 1024px) {
-            .mobile-sidebar-hidden { display: none !important; }
-            .mobile-sidebar-visible {
-                position: fixed; top: 57px; left: 0; bottom: 0; z-index: 40; width: 85%;
-                display: flex !important; box-shadow: 20px 0 50px rgba(0,0,0,0.5);
-            }
-        }
-
-        #run-frame { background: white; width: 100%; height: 100%; border: none; }
+        #run-frame { background: white; width: 100%; height: 100%; border: none; border-radius: 4px; }
     </style>
 </head>
 <body class="flex flex-col">
 
-    <header class="border-b border-[#30363d] p-3 flex justify-between items-center bg-[#161b22] z-50 shrink-0">
+    <!-- Mobile Drawer Backdrop -->
+    <div id="drawer-backdrop" class="sidebar-overlay" onclick="closeDrawers()"></div>
+
+    <!-- Header -->
+    <header class="border-b border-[#30363d] p-3 flex justify-between items-center bg-[#161b22] z-[60] shrink-0">
         <div class="flex items-center gap-3">
-            <button onclick="toggleSidebar()" class="lg:hidden text-gray-400 p-1">
+            <button onclick="toggleRepoDrawer()" class="text-gray-400 p-2 -ml-2">
                 <i class="fas fa-bars text-xl"></i>
             </button>
-            <i class="fab fa-github text-2xl text-white hidden sm:block"></i>
-            <h1 class="text-md font-bold tracking-tight">GitRestore <span class="hidden xs:inline text-[10px] bg-blue-600/20 text-blue-400 px-1.5 py-0.5 rounded ml-1 uppercase">Studio</span></h1>
+            <h1 class="text-md font-bold tracking-tight flex items-center gap-2">
+                <i class="fab fa-github text-xl text-white"></i>
+                <span class="hidden xs:inline">Studio</span>
+            </h1>
         </div>
-        <div id="user-info" class="hidden flex items-center gap-2 sm:gap-4">
-            <button onclick="toggleGlobalSearch()" class="text-gray-400 hover:text-white p-2">
-                <i class="fas fa-search"></i>
-            </button>
-            <span id="username" class="text-xs font-medium opacity-80 hidden md:block"></span>
-            <button onclick="logout()" class="text-[10px] text-red-400 border border-red-900/30 px-2 py-1 rounded">Logout</button>
+
+        <div id="header-actions" class="hidden flex items-center gap-2">
+            <a id="header-live-link" href="#" target="_blank" class="hidden bg-orange-600/20 text-orange-400 text-[10px] font-black px-2 py-1 rounded border border-orange-500/30 uppercase tracking-tighter">
+                <i class="fas fa-external-link-alt mr-1"></i> Live
+            </a>
+            <button onclick="toggleGlobalSearch()" class="text-gray-400 p-2"><i class="fas fa-search"></i></button>
+            <button onclick="logout()" class="text-[10px] text-red-400 font-bold ml-2">OUT</button>
         </div>
     </header>
 
-    <main class="flex flex-1 overflow-hidden">
+    <main class="flex flex-1 overflow-hidden relative">
         
-        <div id="auth-view" class="flex-1 flex flex-col items-center justify-center p-6 bg-[#0d1117]">
-            <div class="card p-8 max-w-md w-full text-center shadow-2xl border-blue-500/20">
-                <i class="fas fa-code-branch text-4xl mb-4 text-blue-500"></i>
-                <h2 class="text-2xl font-bold mb-2">Studio Login</h2>
-                <input type="password" id="pat-token" placeholder="Personal Access Token" class="w-full bg-[#0d1117] border border-[#30363d] rounded p-3 mb-4 focus:border-blue-500 outline-none">
-                <button onclick="login()" class="btn-primary w-full py-3 rounded font-bold text-white">Initialize Workspace</button>
+        <!-- Sidebar: Repositories (Mobile Drawer) -->
+        <aside id="repo-drawer" class="mobile-drawer sidebar flex flex-col bg-[#161b22]">
+            <div class="p-4 border-b border-[#30363d] flex justify-between items-center">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-widest">Repositories</span>
+                <button onclick="showModal('create-repo-modal')" class="text-green-500"><i class="fas fa-plus-circle"></i></button>
             </div>
-        </div>
+            <div class="p-3">
+                <input type="text" id="repo-search" onkeyup="filterRepos()" placeholder="Search projects..." class="w-full bg-[#0d1117] border border-[#30363d] text-sm rounded-lg px-3 py-2 outline-none">
+            </div>
+            <div id="repo-list" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
+        </aside>
 
-        <div id="dashboard-view" class="hidden flex-1 flex flex-row overflow-hidden">
+        <!-- Main Workspace -->
+        <section class="flex-1 flex flex-col overflow-hidden bg-[#0d1117]">
             
-            <aside id="repo-sidebar" class="sidebar w-64 flex flex-col shrink-0 mobile-sidebar-hidden">
-                <div class="p-3 border-b border-[#30363d] flex justify-between items-center bg-[#161b22]">
-                    <h3 class="font-bold text-[10px] text-gray-400 uppercase tracking-widest">Repositories</h3>
-                    <button onclick="showModal('create-repo-modal')" class="text-green-500"><i class="fas fa-plus-circle text-lg"></i></button>
+            <!-- Breadcrumbs / Branch Area -->
+            <div id="repo-toolbar" class="hidden p-2 border-b border-[#30363d] flex justify-between items-center bg-[#161b22] shrink-0">
+                <div class="flex items-center gap-2 overflow-hidden">
+                    <span class="text-blue-400 font-bold text-[11px] truncate max-w-[120px]" id="current-repo-name"></span>
+                    <div id="branch-selector-container" class="flex items-center bg-[#0d1117] px-2 py-0.5 rounded border border-[#30363d]">
+                        <select id="branch-select" onchange="switchBranch()" class="bg-transparent text-[10px] font-bold outline-none cursor-pointer text-gray-300"></select>
+                    </div>
                 </div>
-                <div class="p-2">
-                    <input type="text" id="repo-search" onkeyup="filterRepos()" placeholder="Filter..." class="w-full bg-[#0d1117] border border-[#30363d] text-xs rounded px-3 py-2">
+                <div class="flex gap-1">
+                    <button onclick="toggleFileDrawer()" class="text-[10px] px-2 py-1 rounded bg-[#30363d] text-white">FILES</button>
+                    <button onclick="switchViewTab('pages')" class="text-[10px] px-2 py-1 rounded text-orange-400 font-bold"><i class="fas fa-rocket"></i></button>
                 </div>
-                <div id="repo-list" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
-            </aside>
+            </div>
 
-            <section class="flex-1 flex flex-col overflow-hidden bg-[#0d1117]">
+            <div class="flex-1 flex flex-row overflow-hidden relative">
                 
-                <div class="p-2 border-b border-[#30363d] flex flex-wrap justify-between items-center bg-[#161b22] shrink-0">
-                    <div class="flex items-center gap-2 overflow-hidden">
-                        <span class="text-blue-400 font-bold text-xs truncate" id="current-repo-name">Studio Workspace</span>
-                        <div id="branch-selector-container" class="hidden flex items-center bg-[#0d1117] px-2 py-0.5 rounded border border-[#30363d]">
-                            <select id="branch-select" onchange="switchBranch()" class="bg-transparent text-[10px] outline-none cursor-pointer"></select>
-                        </div>
+                <!-- File Sidebar (Mobile Drawer) -->
+                <aside id="file-drawer" class="mobile-drawer sidebar flex flex-col bg-[#161b22]">
+                    <div class="p-4 border-b border-[#30363d] flex justify-between items-center">
+                        <span class="text-xs font-bold text-gray-500">EXPLORER</span>
+                        <button onclick="showModal('new-file-modal')" class="text-blue-400"><i class="fas fa-file-medical"></i></button>
                     </div>
-                    <div id="repo-nav-tabs" class="hidden flex gap-1">
-                        <button onclick="switchViewTab('explorer')" id="vtab-explorer" class="text-[10px] px-2 py-1 rounded bg-[#30363d] text-white">FILES</button>
-                        <button onclick="switchViewTab('issues')" id="vtab-issues" class="text-[10px] px-2 py-1 rounded text-gray-400">ISSUES</button>
-                        <button onclick="showPagesSettings()" id="vtab-pages" class="text-[10px] px-2 py-1 rounded text-orange-400 uppercase font-bold tracking-tighter"><i class="fas fa-rocket mr-1"></i>Pages</button>
-                    </div>
-                </div>
+                    <div class="flex-1 overflow-y-auto" id="file-explorer"></div>
+                </aside>
 
-                <div class="flex-1 flex flex-row overflow-hidden relative">
+                <!-- Editor Pane -->
+                <div class="flex-1 flex flex-col overflow-hidden relative" id="editor-pane">
                     
-                    <div id="view-explorer" class="flex flex-1 overflow-hidden">
-                        <div id="file-sidebar" class="w-64 border-r border-[#30363d] flex flex-col bg-[#0d1117] shrink-0 mobile-sidebar-hidden lg:flex">
-                            <div class="p-3 border-b border-[#30363d] bg-[#161b22]/30 flex justify-between">
-                                <span class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Explorer</span>
-                                <button id="new-file-btn" onclick="showModal('new-file-modal')" class="text-blue-400 hidden"><i class="fas fa-plus-square"></i></button>
+                    <div id="file-details" class="flex-1 flex flex-col overflow-hidden hidden">
+                        <!-- File Header -->
+                        <div class="p-2 border-b border-[#30363d] flex justify-between items-center bg-[#0d1117] shrink-0">
+                            <div class="flex items-center gap-2 overflow-hidden">
+                                <h2 id="view-file-name" class="text-[10px] font-mono truncate text-gray-500 max-w-[150px]"></h2>
+                                <button id="edit-toggle-btn" onclick="toggleEditMode()" class="bg-blue-600 text-white text-[9px] px-3 py-1 rounded font-black uppercase">EDIT</button>
+                                <button onclick="toggleMaximize()" class="text-gray-500"><i class="fas fa-expand-alt text-[10px]" id="maximize-icon"></i></button>
                             </div>
-                            <div class="flex-1 overflow-y-auto" id="file-explorer"></div>
+                            <button onclick="closeFileView()" class="text-gray-500 p-1"><i class="fas fa-times"></i></button>
+                        </div>
+                        
+                        <!-- Sub Tabs (Scrollable on small screens) -->
+                        <div class="px-2 flex border-b border-[#30363d] gap-4 shrink-0 overflow-x-auto bg-[#0d1117]">
+                            <button onclick="switchEditorTab('edit')" id="etab-edit" class="py-2 text-[9px] font-bold tab-active whitespace-nowrap">CODE</button>
+                            <button onclick="switchEditorTab('diff')" id="etab-diff" class="py-2 text-[9px] font-bold text-gray-500 whitespace-nowrap">DIFF</button>
+                            <button onclick="switchEditorTab('run')" id="etab-run" class="hidden py-2 text-[9px] font-bold text-green-500 whitespace-nowrap">LIVE RUN</button>
+                            <button onclick="switchEditorTab('preview')" id="etab-preview" class="hidden py-2 text-[9px] font-bold text-gray-500 whitespace-nowrap">PREVIEW</button>
+                            <button onclick="switchEditorTab('history')" id="etab-history" class="py-2 text-[9px] font-bold text-gray-500 whitespace-nowrap">HISTORY</button>
                         </div>
 
-                        <div class="flex-1 flex flex-col overflow-hidden bg-[#0d1117] relative" id="editor-pane">
-                            <div id="file-details" class="flex-1 flex flex-col overflow-hidden hidden">
-                                
-                                <div class="p-3 border-b border-[#30363d] flex justify-between items-center shrink-0">
-                                    <div class="flex items-center gap-2 overflow-hidden">
-                                        <h2 id="view-file-name" class="text-xs font-mono truncate text-gray-400 max-w-[150px]"></h2>
-                                        <button id="edit-toggle-btn" onclick="toggleEditMode()" class="bg-blue-600 text-white text-[9px] px-2 py-1 rounded font-bold uppercase">Edit</button>
-                                        <button onclick="toggleMaximize()" class="text-gray-500 hover:text-white shrink-0"><i class="fas fa-expand-arrows-alt text-xs" id="maximize-icon"></i></button>
-                                    </div>
-                                    <button onclick="closeFileView()" class="text-gray-500"><i class="fas fa-times"></i></button>
-                                </div>
-                                
-                                <div class="px-3 flex border-b border-[#30363d] gap-4 shrink-0">
-                                    <button onclick="switchEditorTab('edit')" id="etab-edit" class="py-2 text-[10px] font-bold tab-active">EDITOR</button>
-                                    <button onclick="switchEditorTab('diff')" id="etab-diff" class="py-2 text-[10px] font-bold text-gray-500">DIFF <span id="diff-label" class="text-[8px] bg-blue-500/20 px-1 rounded">LOCAL</span></button>
-                                    <button onclick="switchEditorTab('run')" id="etab-run" class="hidden py-2 text-[10px] font-bold text-green-500">RUN</button>
-                                    <button onclick="switchEditorTab('preview')" id="etab-preview" class="hidden py-2 text-[10px] font-bold text-gray-500">MD</button>
-                                    <button onclick="switchEditorTab('history')" id="etab-history" class="py-2 text-[10px] font-bold text-gray-500">HISTORY</button>
-                                </div>
-
-                                <div id="editor-tab-wrapper" class="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-                                    
-                                    <div id="edit-container" class="flex-1 flex flex-col overflow-hidden p-2">
-                                        <div id="editor"></div>
-                                        <div id="commit-section" class="mt-2 hidden flex flex-col shrink-0">
-                                            <textarea id="commit-msg" rows="4" placeholder="Detailed commit message..." class="w-full bg-[#161b22] border border-[#30363d] rounded p-3 text-xs focus:border-blue-500 outline-none resize-none"></textarea>
-                                            <div class="flex justify-between items-center mt-2">
-                                                <span class="text-[9px] text-gray-500" id="file-stats">Ready</span>
-                                                <button onclick="saveChanges()" class="btn-primary px-8 py-2 rounded font-bold text-[10px] text-white">COMMIT CHANGES</button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div id="diff-container" class="hidden absolute inset-0 flex flex-col overflow-hidden bg-[#0d1117] p-2">
-                                        <div id="diff-header" class="text-[9px] text-gray-500 mb-2 flex justify-between items-center uppercase px-2">
-                                            <span id="diff-mode-text">Local Changes</span>
-                                            <button onclick="switchEditorTab('edit')" class="hover:text-white">Back</button>
-                                        </div>
-                                        <div class="flex-1 overflow-y-auto border border-[#30363d] rounded">
-                                            <div id="diff-view" class="font-mono text-[11px] whitespace-pre min-h-full"></div>
-                                        </div>
-                                    </div>
-
-                                    <div id="run-container" class="hidden absolute inset-0 flex flex-col bg-white overflow-hidden">
-                                        <iframe id="run-frame" sandbox="allow-scripts allow-forms allow-modals"></iframe>
-                                    </div>
-
-                                    <div id="preview-container" class="hidden absolute inset-0 prose prose-invert max-w-none bg-[#0d1117] p-4 border border-[#30363d] overflow-y-auto"></div>
-
-                                    <div id="history-container" class="hidden absolute inset-0 space-y-2 overflow-y-auto p-2 bg-[#0d1117]"></div>
+                        <!-- Tab Content Container -->
+                        <div class="flex-1 flex flex-col min-h-0 relative">
+                            <!-- Code Editor -->
+                            <div id="edit-container" class="flex-1 flex flex-col overflow-hidden p-1">
+                                <div id="editor"></div>
+                                <div id="commit-section" class="mt-2 hidden flex flex-col shrink-0 p-1 bg-[#161b22] border border-[#30363d] rounded-lg">
+                                    <textarea id="commit-msg" rows="3" placeholder="Describe your update..." class="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-xs focus:border-blue-500 outline-none resize-none"></textarea>
+                                    <button onclick="saveChanges()" class="btn-primary w-full mt-2 py-2 rounded font-black text-[10px] text-white uppercase tracking-widest shadow-lg">Commit to Branch</button>
                                 </div>
                             </div>
-                            
-                            <div id="empty-editor-state" class="flex-1 flex flex-col items-center justify-center text-gray-700 opacity-40">
-                                <i class="fas fa-terminal text-6xl mb-4"></i>
-                                <p class="text-xs uppercase font-bold tracking-widest text-center">Select file to initialize studio</p>
+
+                            <!-- Diff Viewer -->
+                            <div id="diff-container" class="hidden absolute inset-0 flex flex-col bg-[#0d1117]">
+                                <div class="p-2 text-[9px] text-gray-500 border-b border-[#30363d] flex justify-between bg-[#161b22]">
+                                    <span id="diff-mode-text">Local Changes</span>
+                                </div>
+                                <div class="flex-1 overflow-y-auto" id="diff-view-scroll">
+                                    <div id="diff-view" class="p-1"></div>
+                                </div>
                             </div>
+
+                            <!-- Live Run -->
+                            <div id="run-container" class="hidden absolute inset-0 flex flex-col bg-white">
+                                <iframe id="run-frame" sandbox="allow-scripts allow-forms allow-modals"></iframe>
+                            </div>
+
+                            <!-- Markdown Preview -->
+                            <div id="preview-container" class="hidden absolute inset-0 prose prose-invert max-w-none bg-[#0d1117] p-4 overflow-y-auto"></div>
+
+                            <!-- History -->
+                            <div id="history-container" class="hidden absolute inset-0 space-y-2 overflow-y-auto p-2 bg-[#0d1117]"></div>
                         </div>
                     </div>
 
-                    <div id="view-issues" class="hidden flex-1 overflow-y-auto p-4 bg-[#0d1117]">
-                        <div id="issue-list" class="space-y-2 max-w-2xl mx-auto"></div>
+                    <div id="empty-editor-state" class="flex-1 flex flex-col items-center justify-center text-gray-700 opacity-20">
+                        <i class="fas fa-mobile-alt text-7xl mb-4"></i>
+                        <p class="text-[10px] font-black uppercase tracking-widest">Select a file to initialize</p>
                     </div>
+                </div>
 
-                    <div id="view-pages" class="hidden flex-1 overflow-y-auto p-4 bg-[#0d1117]">
-                        <div class="max-w-2xl mx-auto space-y-6">
-                            <h2 class="text-sm font-bold uppercase tracking-widest text-gray-400">GitHub Pages Configuration</h2>
+                <!-- Pages / Deployment View -->
+                <div id="view-pages" class="hidden absolute inset-0 flex flex-col bg-[#0d1117] p-4 overflow-y-auto z-40">
+                    <div class="max-w-md mx-auto w-full space-y-6">
+                        <div class="flex justify-between items-center">
+                            <h2 class="text-sm font-black uppercase tracking-tighter text-gray-400">Deployment Studio</h2>
+                            <button onclick="switchViewTab('explorer')" class="text-gray-500"><i class="fas fa-times"></i></button>
+                        </div>
+                        
+                        <!-- Deployment Status -->
+                        <div class="card p-5 border-blue-500/20 bg-blue-900/10 shadow-xl">
+                            <div class="text-[10px] text-gray-500 uppercase font-black mb-1">Live Hyperlink</div>
+                            <div id="pages-status-text" class="text-xs font-bold mb-3 text-gray-300 italic">Checking...</div>
                             
-                            <div id="pages-status-card" class="card p-5 border-blue-500/20 bg-blue-900/5">
-                                <div class="flex items-center justify-between mb-4">
-                                    <div class="flex items-center gap-3">
-                                        <i class="fas fa-rocket text-xl text-orange-400"></i>
-                                        <div>
-                                            <div class="text-[10px] text-gray-500 uppercase font-bold">Deployment Status</div>
-                                            <div id="pages-status-text" class="text-xs font-bold">Checking...</div>
-                                        </div>
-                                    </div>
-                                    <div id="pages-url-container" class="hidden">
-                                        <button onclick="window.open(document.getElementById('pages-url').textContent, '_blank')" class="bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded">VISIT SITE</button>
-                                    </div>
-                                </div>
-                                <div id="pages-url" class="text-[11px] text-blue-400 font-mono break-all opacity-70"></div>
-                            </div>
-
-                            <div class="card p-5">
-                                <h3 class="text-xs font-bold mb-4 flex items-center gap-2"><i class="fas fa-cog"></i> SETTINGS</h3>
-                                <div class="space-y-4">
-                                    <div>
-                                        <label class="text-[10px] text-gray-500 uppercase block mb-1">Source Branch</label>
-                                        <select id="pages-branch-select" class="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-xs outline-none focus:border-blue-500"></select>
-                                    </div>
-                                    <div>
-                                        <label class="text-[10px] text-gray-500 uppercase block mb-1">Source Folder</label>
-                                        <select id="pages-folder-select" class="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-xs outline-none focus:border-blue-500">
-                                            <option value="/">/ (root)</option>
-                                            <option value="/docs">/docs</option>
-                                        </select>
-                                    </div>
-                                    <button id="pages-save-btn" onclick="savePagesConfig()" class="btn-primary w-full py-2.5 rounded font-bold text-[11px] text-white shadow-lg">ENABLE / UPDATE PAGES</button>
-                                </div>
-                            </div>
-
-                            <div class="card p-5 border-purple-500/20">
-                                <h3 class="text-xs font-bold mb-1 text-purple-400">PWA STUDIO</h3>
-                                <p class="text-[10px] text-gray-500 mb-4 tracking-tight leading-relaxed">Generate necessary assets for a Progressive Web App.</p>
+                            <div id="pages-url-box" class="hidden">
+                                <div id="pages-url" class="bg-black/40 p-3 rounded border border-[#30363d] text-blue-400 font-mono text-[11px] break-all mb-4"></div>
                                 <div class="grid grid-cols-2 gap-2">
-                                    <button onclick="generatePWAFile('manifest')" class="bg-[#0d1117] border border-[#30363d] p-3 rounded text-[10px] font-bold hover:border-purple-500 transition">MANIFEST.JSON</button>
-                                    <button onclick="generatePWAFile('sw')" class="bg-[#0d1117] border border-[#30363d] p-3 rounded text-[10px] font-bold hover:border-purple-500 transition">SW.JS</button>
+                                    <button onclick="window.open(document.getElementById('pages-url').textContent, '_blank')" class="bg-blue-600 text-white text-[10px] font-black py-3 rounded uppercase tracking-widest shadow-lg">Launch Site</button>
+                                    <button onclick="copyToClipboard(document.getElementById('pages-url').textContent)" class="bg-[#21262d] text-gray-300 text-[10px] font-black py-3 rounded border border-[#30363d] uppercase tracking-widest">Copy Link</button>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Config -->
+                        <div class="card p-5">
+                            <h3 class="text-[10px] font-black mb-4 uppercase text-gray-500">Configure GitHub Pages</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="text-[9px] text-gray-500 uppercase font-bold block mb-1">Branch</label>
+                                    <select id="pages-branch-select" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-xs outline-none focus:border-blue-500 appearance-none"></select>
+                                </div>
+                                <div>
+                                    <label class="text-[9px] text-gray-500 uppercase font-bold block mb-1">Folder</label>
+                                    <select id="pages-folder-select" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-xs outline-none appearance-none">
+                                        <option value="/">Root ( / )</option>
+                                        <option value="/docs">Docs ( /docs )</option>
+                                    </select>
+                                </div>
+                                <button id="pages-save-btn" onclick="savePagesConfig()" class="btn-primary w-full py-3 rounded font-black text-[10px] text-white uppercase tracking-widest shadow-lg">Update Deployment</button>
                             </div>
                         </div>
                     </div>
                 </div>
-            </section>
-        </div>
+
+            </div>
+        </section>
     </main>
 
-    <div id="global-search-overlay" class="fixed inset-0 modal-overlay hidden z-[100] p-4 flex flex-col items-center">
-        <div class="w-full max-w-2xl card p-4 shadow-2xl mt-10">
+    <!-- Modals -->
+    <div id="global-search-overlay" class="fixed inset-0 modal-overlay hidden z-[200] p-4">
+        <div class="w-full max-w-lg mx-auto card p-4 shadow-2xl mt-10">
             <div class="flex items-center gap-3 border-b border-[#30363d] pb-2 mb-4">
-                <i class="fas fa-search text-blue-500"></i>
-                <input type="text" id="global-search-input" onkeyup="if(event.key==='Enter') executeGlobalSearch()" placeholder="Deep search current repo..." class="flex-1 bg-transparent text-sm outline-none border-none">
+                <input type="text" id="global-search-input" onkeyup="if(event.key==='Enter') executeGlobalSearch()" placeholder="Search Code..." class="flex-1 bg-transparent text-lg outline-none">
                 <button onclick="toggleGlobalSearch()"><i class="fas fa-times"></i></button>
             </div>
-            <div id="search-results" class="max-h-[50vh] overflow-y-auto space-y-1"></div>
+            <div id="search-results" class="max-h-[50vh] overflow-y-auto"></div>
         </div>
     </div>
 
-    <div id="restore-modal" class="fixed inset-0 modal-overlay hidden items-center justify-center p-4 z-[110]">
-        <div class="card p-5 max-w-sm w-full">
-            <h3 class="text-sm font-bold mb-2 text-blue-400">Restore Point</h3>
-            <p class="text-[10px] mb-4 text-gray-400">Overwrite current branch with this version?</p>
-            <div class="flex justify-end gap-3">
-                <button onclick="hideModal('restore-modal')" class="text-xs text-gray-500">Cancel</button>
-                <button id="confirm-restore-btn" class="btn-primary px-4 py-1.5 rounded text-[10px] font-bold text-white uppercase">Confirm Restore</button>
+    <div id="restore-modal" class="fixed inset-0 modal-overlay hidden items-center justify-center p-4 z-[210]">
+        <div class="card p-5 max-w-xs w-full text-center">
+            <h3 class="text-sm font-black mb-2 text-blue-400 uppercase">Rollback</h3>
+            <p class="text-[10px] text-gray-500 mb-6">Restore <span id="restore-filename" class="text-white"></span>?</p>
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="hideModal('restore-modal')" class="text-xs text-gray-500 py-2">CANCEL</button>
+                <button id="confirm-restore-btn" class="bg-blue-600 text-white text-[10px] font-black rounded py-2">CONFIRM</button>
             </div>
         </div>
     </div>
 
-    <div id="create-repo-modal" class="fixed inset-0 modal-overlay hidden items-center justify-center p-4 z-[110]">
-        <div class="card p-5 max-w-sm w-full">
-            <h3 class="text-sm font-bold mb-4 uppercase tracking-tighter">New Repository</h3>
-            <input type="text" id="new-repo-name" placeholder="Repository name" class="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-xs mb-4 outline-none focus:border-blue-500">
-            <div class="flex justify-end gap-3">
-                <button onclick="hideModal('create-repo-modal')" class="text-xs text-gray-500">Cancel</button>
-                <button onclick="createRepo()" class="btn-primary px-4 py-1.5 rounded text-[10px] font-bold text-white">Create</button>
-            </div>
+    <div id="create-repo-modal" class="fixed inset-0 modal-overlay hidden items-center justify-center p-4 z-[210]">
+        <div class="card p-5 max-w-xs w-full">
+            <h3 class="text-xs font-black mb-4 uppercase">Create Repository</h3>
+            <input type="text" id="new-repo-name" placeholder="Repository Name" class="w-full bg-[#0d1117] border border-[#30363d] rounded p-3 text-xs mb-4 outline-none">
+            <button onclick="createRepo()" class="btn-primary w-full py-2.5 rounded font-black text-[10px] text-white uppercase">Initialize</button>
         </div>
     </div>
 
-    <div id="new-file-modal" class="fixed inset-0 modal-overlay hidden items-center justify-center p-4 z-[110]">
-        <div class="card p-5 max-w-sm w-full">
-            <h3 class="text-sm font-bold mb-4 uppercase">New File</h3>
-            <input type="text" id="new-filename" placeholder="path/to/script.js" class="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-xs mb-4 outline-none focus:border-blue-500">
-            <div class="flex justify-end gap-3">
-                <button onclick="hideModal('new-file-modal')" class="text-xs text-gray-500">Cancel</button>
-                <button onclick="createFile()" class="btn-primary px-4 py-1.5 rounded text-[10px] font-bold text-white">Create</button>
-            </div>
+    <div id="new-file-modal" class="fixed inset-0 modal-overlay hidden items-center justify-center p-4 z-[210]">
+        <div class="card p-5 max-w-xs w-full">
+            <h3 class="text-xs font-black mb-4 uppercase">New File</h3>
+            <input type="text" id="new-filename" placeholder="script.js" class="w-full bg-[#0d1117] border border-[#30363d] rounded p-3 text-xs mb-4 outline-none">
+            <button onclick="createFile()" class="btn-primary w-full py-2.5 rounded font-black text-[10px] text-white uppercase">Create</button>
         </div>
     </div>
 
-    <div id="toast-container" class="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 z-[200] flex flex-col gap-2"></div>
+    <div id="toast-container" class="fixed top-4 left-4 right-4 sm:left-auto sm:right-4 z-[300] flex flex-col gap-2"></div>
 
     <script>
         let token = '';
@@ -321,7 +308,6 @@
         let currentFileSha = '';
         let currentFileData = ''; 
         let currentBranch = '';
-        let branches = [];
         let editor;
         let isEditMode = false;
         let pagesConfigured = false;
@@ -332,12 +318,13 @@
             editor.setShowPrintMargin(false);
             editor.setReadOnly(true); 
             editor.setOptions({
-                fontSize: "13px",
+                fontSize: "12px",
                 enableBasicAutocompletion: true,
                 useSoftTabs: true,
                 tabSize: 2,
-                scrollPastEnd: 0.5,
-                wrap: true
+                scrollPastEnd: 0.2,
+                wrap: true,
+                useWorker: false // Improved performance on mobile
             });
 
             const savedToken = sessionStorage.getItem('gh_token');
@@ -348,7 +335,7 @@
         };
 
         async function ghApi(endpoint, options = {}) {
-            const res = await fetch(`https://api.github.com${endpoint}`, {
+            return await fetch(`https://api.github.com${endpoint}`, {
                 ...options,
                 headers: {
                     'Authorization': `token ${token}`,
@@ -356,17 +343,16 @@
                     ...options.headers
                 }
             });
-            return res;
         }
 
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             const colors = { error: 'bg-red-600', success: 'bg-green-600', info: 'bg-blue-600' };
-            toast.className = `${colors[type]} text-white px-4 py-3 rounded shadow-2xl flex items-center gap-2 transition-all duration-300 transform text-[10px] font-bold uppercase tracking-widest`;
-            toast.innerHTML = `<i class="fas ${type==='error'?'fa-circle-xmark':'fa-circle-check'}"></i> <span>${message}</span>`;
+            toast.className = `${colors[type]} text-white px-4 py-3 rounded-lg shadow-2xl flex items-center gap-2 transition-all duration-300 transform text-[10px] font-black uppercase tracking-widest`;
+            toast.innerHTML = `<i class="fas ${type==='error'?'fa-exclamation-triangle':'fa-info-circle'}"></i> <span>${message}</span>`;
             container.appendChild(toast);
-            setTimeout(() => { toast.classList.add('opacity-0', 'translate-y-2'); setTimeout(() => toast.remove(), 300); }, 3000);
+            setTimeout(() => { toast.classList.add('opacity-0', '-translate-y-2'); setTimeout(() => toast.remove(), 300); }, 3000);
         }
 
         function decodeBase64(b64) {
@@ -375,13 +361,34 @@
                 const bytes = new Uint8Array(binaryString.length);
                 for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
                 return new TextDecoder('utf-8').decode(bytes);
-            } catch (e) { return "File content is binary or incompatible with editor."; }
+            } catch (e) { return "Encoding error: Cannot display binary or multi-byte content correctly."; }
         }
 
-        function toggleSidebar() {
-            const sidebar = document.getElementById('repo-sidebar');
-            sidebar.classList.toggle('mobile-sidebar-hidden');
-            sidebar.classList.toggle('mobile-sidebar-visible');
+        function copyToClipboard(text) {
+            const el = document.createElement('textarea');
+            el.value = text;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            showToast('Link copied to clipboard!', 'success');
+        }
+
+        // Drawer Controls
+        function toggleRepoDrawer() {
+            document.getElementById('drawer-backdrop').classList.toggle('active');
+            document.getElementById('repo-drawer').classList.toggle('active');
+            document.getElementById('file-drawer').classList.remove('active');
+        }
+        function toggleFileDrawer() {
+            document.getElementById('drawer-backdrop').classList.toggle('active');
+            document.getElementById('file-drawer').classList.toggle('active');
+            document.getElementById('repo-drawer').classList.remove('active');
+        }
+        function closeDrawers() {
+            document.getElementById('drawer-backdrop').classList.remove('active');
+            document.getElementById('repo-drawer').classList.remove('active');
+            document.getElementById('file-drawer').classList.remove('active');
         }
 
         function toggleEditMode() {
@@ -391,12 +398,12 @@
             const btn = document.getElementById('edit-toggle-btn');
             const section = document.getElementById('commit-section');
             if (isEditMode) {
-                btn.textContent = 'Exit Edit';
+                btn.textContent = 'DONE';
                 btn.classList.replace('bg-blue-600', 'bg-gray-600');
                 section.classList.remove('hidden');
                 editor.focus();
             } else {
-                btn.textContent = 'Edit';
+                btn.textContent = 'EDIT';
                 btn.classList.replace('bg-gray-600', 'bg-blue-600');
                 section.classList.add('hidden');
             }
@@ -407,14 +414,13 @@
             const pane = document.getElementById('editor-pane');
             const icon = document.getElementById('maximize-icon');
             const isMax = pane.classList.toggle('editor-maximized');
-            icon.classList.toggle('fa-expand-arrows-alt', !isMax);
-            icon.classList.toggle('fa-compress-arrows-alt', isMax);
+            icon.classList.toggle('fa-expand-alt', !isMax);
+            icon.classList.toggle('fa-compress-alt', isMax);
             setTimeout(() => editor.resize(), 100);
         }
 
         async function login() {
-            const input = document.getElementById('pat-token');
-            token = input.value.trim();
+            token = document.getElementById('pat-token').value.trim();
             if (!token) return showToast('Token required', 'error');
             validateAndInit();
         }
@@ -424,11 +430,12 @@
         async function validateAndInit() {
             try {
                 const res = await ghApi('/user');
-                if (!res.ok) throw new Error('Auth failed');
+                if (!res.ok) throw new Error('Invalid token');
                 user = await res.json();
                 sessionStorage.setItem('gh_token', token);
                 document.getElementById('username').textContent = `@${user.login}`;
                 document.getElementById('user-info').classList.remove('hidden');
+                document.getElementById('header-actions').classList.remove('hidden');
                 document.getElementById('auth-view').classList.add('hidden');
                 document.getElementById('dashboard-view').classList.remove('hidden');
                 fetchRepos();
@@ -440,12 +447,12 @@
                 const res = await ghApi('/user/repos?sort=updated&per_page=100');
                 repos = await res.json();
                 renderRepos(repos);
-            } catch (err) { showToast('Repo load failed', 'error'); }
+            } catch (err) { showToast('Connection error', 'error'); }
         }
 
         function renderRepos(data) {
             document.getElementById('repo-list').innerHTML = data.map(repo => `
-                <div onclick="selectRepo('${repo.full_name}', '${repo.default_branch}')" class="p-2 text-[10px] rounded cursor-pointer hover:bg-[#1f2937] transition truncate ${currentRepo === repo.full_name ? 'bg-blue-600/10 text-blue-400 font-bold' : 'text-gray-400'}">
+                <div onclick="selectRepo('${repo.full_name}', '${repo.default_branch}')" class="p-3 text-xs rounded-lg cursor-pointer hover:bg-[#1f2937] transition truncate ${currentRepo === repo.full_name ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20 font-black' : 'text-gray-400'}">
                     <i class="fas ${repo.private ? 'fa-lock' : 'fa-globe'} mr-2 opacity-50"></i>
                     ${repo.name}
                 </div>
@@ -461,17 +468,14 @@
             currentRepo = fullName;
             currentBranch = defaultBranch;
             document.getElementById('current-repo-name').textContent = fullName;
-            document.getElementById('repo-nav-tabs').classList.remove('hidden');
+            document.getElementById('repo-toolbar').classList.remove('hidden');
             document.getElementById('new-file-btn').classList.remove('hidden');
-            document.getElementById('branch-selector-container').classList.remove('hidden');
-            
-            const sidebar = document.getElementById('repo-sidebar');
-            if (sidebar.classList.contains('mobile-sidebar-visible')) toggleSidebar();
-            
             renderRepos(repos);
             await fetchBranches();
             switchViewTab('explorer');
             fetchFiles('');
+            checkPagesStatusSilent();
+            closeDrawers();
         }
 
         async function fetchBranches() {
@@ -495,108 +499,105 @@
                 if (el) el.classList.add('hidden');
             });
             document.getElementById(`view-${tab}`).classList.remove('hidden');
-            
-            ['vtab-explorer', 'vtab-issues', 'vtab-pages'].forEach(t => {
-                const btn = document.getElementById(t);
-                if (btn) btn.classList.toggle('bg-[#30363d]', t === `vtab-${tab}`);
-            });
-            if (tab === 'issues') fetchIssues();
             if (tab === 'pages') showPagesSettings();
         }
 
-        // PAGES MANAGEMENT LOGIC
+        // Silent check for header live link
+        async function checkPagesStatusSilent() {
+            const liveLink = document.getElementById('header-live-link');
+            try {
+                const res = await ghApi(`/repos/${currentRepo}/pages`);
+                if (res.ok) {
+                    const data = await res.json();
+                    liveLink.href = data.html_url;
+                    liveLink.classList.remove('hidden');
+                } else {
+                    liveLink.classList.add('hidden');
+                }
+            } catch (e) { liveLink.classList.add('hidden'); }
+        }
+
         async function showPagesSettings() {
             switchViewTab('pages');
             const statusText = document.getElementById('pages-status-text');
             const urlText = document.getElementById('pages-url');
-            const urlContainer = document.getElementById('pages-url-container');
-            const saveBtn = document.getElementById('pages-save-btn');
+            const urlBox = document.getElementById('pages-url-box');
             
-            statusText.textContent = "CHECKING API...";
-            urlText.textContent = "";
-            urlContainer.classList.add('hidden');
+            statusText.textContent = "QUERYING GITHUB...";
+            urlBox.classList.add('hidden');
             
             try {
                 const res = await ghApi(`/repos/${currentRepo}/pages`);
                 if (res.ok) {
                     const data = await res.json();
                     pagesConfigured = true;
-                    statusText.innerHTML = `<span class="text-green-500">ACTIVE</span> (${data.status || 'Ready'})`;
+                    statusText.innerHTML = `<span class="text-green-500 font-black">ACTIVE</span> (${data.status})`;
                     urlText.textContent = data.html_url;
-                    urlContainer.classList.remove('hidden');
-                    saveBtn.textContent = "UPDATE PAGES SETTINGS";
-                    
+                    urlBox.classList.remove('hidden');
                     document.getElementById('pages-branch-select').value = data.source.branch;
                     document.getElementById('pages-folder-select').value = data.source.path;
                 } else {
                     pagesConfigured = false;
-                    statusText.innerHTML = `<span class="text-red-400">DISABLED</span>`;
-                    saveBtn.textContent = "SAVE / ENABLE PAGES";
+                    statusText.innerHTML = `<span class="text-red-400">NOT ENABLED</span>`;
                 }
-            } catch (err) {
-                statusText.textContent = "ERROR FETCHING STATUS";
-            }
+            } catch (err) { statusText.textContent = "ERROR"; }
         }
 
         async function savePagesConfig() {
             const branch = document.getElementById('pages-branch-select').value;
             const path = document.getElementById('pages-folder-select').value;
             const method = pagesConfigured ? 'PUT' : 'POST';
-            
-            showToast('Synchronizing with GitHub...', 'info');
-            
+            showToast('Syncing deployment...');
             try {
                 const res = await ghApi(`/repos/${currentRepo}/pages`, {
                     method: method,
+                    headers: { 'Accept': 'application/vnd.github+json' },
                     body: JSON.stringify({ source: { branch, path } })
                 });
-                
                 if (res.ok || res.status === 201 || res.status === 204) {
-                    showToast('Pages successfully updated!', 'success');
-                    setTimeout(showPagesSettings, 1000);
+                    showToast('Update success!', 'success');
+                    setTimeout(showPagesSettings, 1500);
+                    checkPagesStatusSilent();
                 } else {
-                    const errData = await res.json();
-                    throw new Error(errData.message);
+                    const d = await res.json();
+                    throw new Error(d.message);
                 }
-            } catch (err) {
-                showToast(`Failed: ${err.message}`, 'error');
-            }
+            } catch (err) { showToast(err.message, 'error'); }
         }
 
-        // FILE & EDITOR LOGIC
         async function fetchFiles(path = '') {
             currentDir = path;
             const explorer = document.getElementById('file-explorer');
-            explorer.innerHTML = '<div class="p-4 shimmer h-10 rounded mb-2 mx-2 mt-2"></div>';
+            explorer.innerHTML = '<div class="p-4 shimmer h-12 rounded m-2"></div>';
             try {
                 const res = await ghApi(`/repos/${currentRepo}/contents/${path}?ref=${currentBranch}`);
                 const files = await res.json();
                 let html = '';
                 if (path !== '') {
                     const parent = path.split('/').slice(0, -1).join('/');
-                    html += `<div onclick="fetchFiles('${parent}')" class="p-3 text-[10px] cursor-pointer text-blue-400 font-bold border-b border-[#30363d]"><i class="fas fa-arrow-left mr-2"></i> BACK</div>`;
+                    html += `<div onclick="fetchFiles('${parent}')" class="p-4 text-[10px] cursor-pointer text-blue-400 font-black border-b border-[#30363d] uppercase bg-blue-400/5 tracking-widest"><i class="fas fa-chevron-left mr-2"></i> Parent Folder</div>`;
                 }
                 files.sort((a,b) => (a.type === 'dir' ? -1 : 1)).forEach(file => {
                     const icon = file.type === 'dir' ? 'fa-folder text-yellow-500' : 'fa-file-code text-blue-400';
                     html += `
-                        <div class="file-item p-3 text-[10px] cursor-pointer hover:bg-[#1f2937] flex justify-between group">
-                            <span onclick="${file.type === 'dir' ? `fetchFiles('${file.path}')` : `openFile('${file.path}')`}" class="flex-1 truncate">
-                                <i class="fas ${icon} mr-2 w-4 text-center"></i> ${file.name}
+                        <div class="file-item p-4 text-[11px] cursor-pointer hover:bg-[#1f2937] flex justify-between group border-b border-[#30363d] bg-[#161b22]">
+                            <span onclick="${file.type === 'dir' ? `fetchFiles('${file.path}')` : `openFile('${file.path}')`}" class="flex-1 truncate font-bold">
+                                <i class="fas ${icon} mr-3 w-4 text-center"></i> ${file.name}
                             </span>
-                            <div class="file-actions hidden gap-2">
-                                <i onclick="deleteFile('${file.path}')" class="fas fa-trash text-red-500 hover:scale-125"></i>
+                            <div class="file-actions hidden gap-4">
+                                <i onclick="deleteFile('${file.path}')" class="fas fa-trash text-red-500"></i>
                             </div>
                         </div>`;
                 });
                 explorer.innerHTML = html;
-            } catch (err) { explorer.innerHTML = `<div class="p-4 text-xs text-center text-gray-500">Empty directory</div>`; }
+            } catch (err) { explorer.innerHTML = `<div class="p-10 text-center text-gray-500 text-xs">Directory inaccessible</div>`; }
         }
 
         async function openFile(path) {
             activeFilePath = path;
             isEditMode = false;
             editor.setReadOnly(true);
-            document.getElementById('edit-toggle-btn').textContent = 'Edit';
+            document.getElementById('edit-toggle-btn').textContent = 'EDIT';
             document.getElementById('commit-section').classList.add('hidden');
             document.getElementById('empty-editor-state').classList.add('hidden');
             document.getElementById('file-details').classList.remove('hidden');
@@ -619,8 +620,9 @@
                 switchEditorTab('edit');
                 fetchHistory(path);
                 document.getElementById('file-stats').textContent = `${currentFileData.split('\n').length} LINES`;
-                setTimeout(() => editor.resize(), 50);
-            } catch (err) { showToast('Load error', 'error'); }
+                setTimeout(() => editor.resize(), 100);
+                closeDrawers();
+            } catch (err) { showToast('Load Error', 'error'); }
         }
 
         function switchEditorTab(tab) {
@@ -628,8 +630,10 @@
                 const el = document.getElementById(t === 'edit' ? 'edit-container' : `${t}-container`);
                 if (el) el.classList.add('hidden');
                 const btn = document.getElementById(`etab-${t}`);
-                if (btn) btn.classList.remove('tab-active');
-                if (btn) btn.classList.replace('text-white', 'text-gray-500');
+                if (btn) {
+                    btn.classList.remove('tab-active');
+                    btn.classList.replace('text-white', 'text-gray-500');
+                }
             });
             
             const target = tab === 'edit' ? 'edit-container' : `${tab}-container`;
@@ -641,32 +645,10 @@
             }
 
             if (tab === 'preview') document.getElementById('preview-container').innerHTML = marked.parse(editor.getValue());
-            if (tab === 'diff') generateLocalDiff();
-            if (tab === 'run') {
-                const frame = document.getElementById('run-frame');
-                frame.srcdoc = editor.getValue();
-            }
+            if (tab === 'diff') renderDiff(currentFileData, editor.getValue());
+            if (tab === 'run') document.getElementById('run-frame').srcdoc = editor.getValue();
+            
             editor.resize();
-        }
-
-        function generateLocalDiff() {
-            document.getElementById('diff-mode-text').textContent = "Local Changes (Local Editor vs GitHub Branch)";
-            document.getElementById('diff-label').textContent = "LOCAL";
-            renderDiff(currentFileData, editor.getValue());
-        }
-
-        async function diffCommit(sha) {
-            try {
-                showToast('Fetching point-in-time content...', 'info');
-                const res = await ghApi(`/repos/${currentRepo}/contents/${activeFilePath}?ref=${sha}`);
-                const data = await res.json();
-                const oldContent = decodeBase64(data.content || "");
-                
-                switchEditorTab('diff');
-                document.getElementById('diff-mode-text').textContent = `Version Diff (Commit ${sha.substring(0,7)} vs Current Server)`;
-                document.getElementById('diff-label').textContent = "VERSION";
-                renderDiff(oldContent, currentFileData);
-            } catch (err) { showToast('Diff Fetch Error', 'error'); }
         }
 
         function renderDiff(base, modified) {
@@ -674,48 +656,49 @@
             const modLines = modified.split('\n');
             const diffView = document.getElementById('diff-view');
             let html = '';
-            
             const max = Math.max(baseLines.length, modLines.length);
             for (let i = 0; i < max; i++) {
                 const bLine = baseLines[i] || '';
                 const mLine = modLines[i] || '';
-                if (bLine === mLine) {
-                    html += `<div class="diff-line">  ${escapeHtml(mLine)}</div>`;
-                } else {
+                if (bLine === mLine) html += `<div class="diff-line text-gray-700">  ${escapeHtml(mLine)}</div>`;
+                else {
                     if (i < baseLines.length) html += `<div class="diff-line diff-removed">- ${escapeHtml(bLine)}</div>`;
                     if (i < modLines.length) html += `<div class="diff-line diff-added">+ ${escapeHtml(mLine)}</div>`;
                 }
             }
-            diffView.innerHTML = html || '<div class="p-10 text-center text-gray-600 italic">No differences found.</div>';
+            diffView.innerHTML = html || '<div class="p-10 text-center text-gray-600">No changes.</div>';
         }
 
         function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
         async function saveChanges() {
             const message = document.getElementById('commit-msg').value.trim();
-            if (!message) return showToast('Commit message required', 'error');
+            if (!message) return showToast('Comment is required', 'error');
             try {
                 const res = await ghApi(`/repos/${currentRepo}/contents/${activeFilePath}`, {
                     method: 'PUT',
                     body: JSON.stringify({ message, content: btoa(unescape(encodeURIComponent(editor.getValue()))), sha: currentFileSha, branch: currentBranch })
                 });
-                if (res.ok) { showToast('Committed successfully!', 'success'); document.getElementById('commit-msg').value = ''; openFile(activeFilePath); }
-                else throw new Error('API Error');
-            } catch (err) { showToast('Commit failed', 'error'); }
+                if (res.ok) { 
+                    showToast('Committed!', 'success'); 
+                    document.getElementById('commit-msg').value = ''; 
+                    openFile(activeFilePath); 
+                }
+            } catch (err) { showToast('Commit error', 'error'); }
         }
 
         async function executeGlobalSearch() {
             const q = document.getElementById('global-search-input').value.trim();
             const resultsEl = document.getElementById('search-results');
             if (!q) return;
-            resultsEl.innerHTML = '<div class="p-4 text-center text-xs animate-pulse">Scanning repository...</div>';
+            resultsEl.innerHTML = '<div class="p-4 text-center text-xs animate-pulse">Searching...</div>';
             try {
                 const res = await ghApi(`/search/code?q=${encodeURIComponent(q)}+repo:${currentRepo}`);
                 const data = await res.json();
                 resultsEl.innerHTML = data.items.map(item => `
-                    <div onclick="openFile('${item.path}'); toggleGlobalSearch();" class="card p-3 text-[10px] cursor-pointer mb-1 truncate hover:border-blue-500">${item.path}</div>
-                `).join('') || '<div class="text-center text-xs p-4">No results.</div>';
-            } catch (err) { resultsEl.innerHTML = 'Search failure'; }
+                    <div onclick="openFile('${item.path}'); toggleGlobalSearch();" class="card p-3 text-[10px] cursor-pointer mb-2 truncate border-[#30363d]">${item.path}</div>
+                `).join('') || '<div class="text-center p-10">Empty results.</div>';
+            } catch (err) { resultsEl.innerHTML = 'Error'; }
         }
 
         function toggleGlobalSearch() {
@@ -724,8 +707,14 @@
             if (!overlay.classList.contains('hidden')) document.getElementById('global-search-input').focus();
         }
 
-        function showModal(id) { document.getElementById(id).classList.remove('hidden'); document.getElementById(id).style.display = 'flex'; }
-        function hideModal(id) { document.getElementById(id).classList.add('hidden'); document.getElementById(id).style.display = 'none'; }
+        function showModal(id) { 
+            const el = document.getElementById(id);
+            if(el) { el.classList.remove('hidden'); el.style.display = 'flex'; }
+        }
+        function hideModal(id) { 
+            const el = document.getElementById(id);
+            if(el) { el.classList.add('hidden'); el.style.display = 'none'; }
+        }
         
         function closeFileView() { 
             document.getElementById('editor-pane').classList.remove('editor-maximized');
@@ -734,67 +723,40 @@
             activeFilePath = '';
         }
 
-        async function fetchIssues() {
-            const list = document.getElementById('issue-list');
-            list.innerHTML = '<div class="shimmer h-10 rounded"></div>';
-            const res = await ghApi(`/repos/${currentRepo}/issues?state=open`);
-            const data = await res.json();
-            list.innerHTML = data.map(i => `<div class="card p-3 text-[10px] font-bold border-l-4 border-green-500"><i class="fas fa-exclamation-circle mr-2"></i>${i.title}</div>`).join('') || '<div class="text-center p-10 opacity-30">No issues.</div>';
-        }
-
         async function fetchHistory(path) {
             const list = document.getElementById('history-container');
             const res = await ghApi(`/repos/${currentRepo}/commits?path=${path}&sha=${currentBranch}`);
             const data = await res.json();
             list.innerHTML = data.map(c => `
                 <div class="card p-3 flex flex-col gap-3 text-[9px] bg-[#161b22]">
-                    <div class="truncate">
-                        <div class="font-bold text-gray-200 truncate pr-10">${c.commit.message}</div>
-                        <div class="text-gray-500 mt-1">${new Date(c.commit.author.date).toLocaleString()}</div>
-                    </div>
+                    <div class="truncate font-bold text-gray-200">${c.commit.message}</div>
                     <div class="flex gap-1">
-                        <button onclick="diffCommit('${c.sha}')" class="flex-1 bg-blue-600/20 text-blue-400 py-1.5 rounded font-bold uppercase tracking-tighter border border-blue-500/30">DIFF</button>
-                        <button onclick="window.open(URL.createObjectURL(new Blob([currentFileData], {type:'text/html'})), '_blank')" class="flex-1 bg-purple-600/20 text-purple-400 py-1.5 rounded font-bold uppercase tracking-tighter border border-purple-500/30">RUN</button>
-                        <button onclick="requestRestore('${c.sha}')" class="flex-1 bg-green-600/20 text-green-500 py-1.5 rounded font-bold uppercase tracking-tighter border border-green-500/30">RESTORE</button>
+                        <button onclick="window.open(URL.createObjectURL(new Blob([currentFileData], {type:'text/html'})), '_blank')" class="flex-1 bg-purple-600/20 text-purple-400 py-2 rounded font-black">RUN</button>
+                        <button onclick="requestRestore('${c.sha}')" class="flex-1 bg-green-600/20 text-green-500 py-2 rounded font-black">RESTORE</button>
                     </div>
                 </div>
-            `).join('') || 'No history found.';
-        }
-
-        function requestRestore(sha) {
-             document.getElementById('restore-filename').textContent = activeFilePath;
-             showModal('restore-modal');
-             document.getElementById('confirm-restore-btn').onclick = async () => {
-                 const res = await ghApi(`/repos/${currentRepo}/contents/${activeFilePath}?ref=${sha}`);
-                 const data = await res.json();
-                 const content = decodeBase64(data.content);
-                 await ghApi(`/repos/${currentRepo}/contents/${activeFilePath}`, {
-                     method: 'PUT',
-                     body: JSON.stringify({ message: 'Historical restore', content: btoa(unescape(encodeURIComponent(content))), sha: currentFileSha, branch: currentBranch })
-                 });
-                 showToast('Restored!', 'success'); openFile(activeFilePath); hideModal('restore-modal');
-             }
+            `).join('') || 'None';
         }
 
         async function createFile() {
             const name = document.getElementById('new-filename').value.trim();
             if (!name) return;
             const res = await ghApi(`/repos/${currentRepo}/contents/${name}`, { method: 'PUT', body: JSON.stringify({ message: `Create ${name}`, content: '', branch: currentBranch }) });
-            if (res.ok) { hideModal('new-file-modal'); fetchFiles(currentDir); }
+            if (res.ok) { hideModal('new-file-modal'); fetchFiles(currentDir); closeDrawers(); }
         }
 
         async function createRepo() {
             const name = document.getElementById('new-repo-name').value.trim();
             if(!name) return;
             const res = await ghApi('/user/repos', { method: 'POST', body: JSON.stringify({ name, auto_init: true }) });
-            if (res.ok) { hideModal('create-repo-modal'); fetchRepos(); }
+            if (res.ok) { hideModal('create-repo-modal'); fetchRepos(); closeDrawers(); }
         }
 
         async function generatePWAFile(type) {
             const name = type === 'manifest' ? 'manifest.json' : 'sw.js';
-            const content = type === 'manifest' ? '{"name":"GitRestore App","short_name":"App","start_url":"/","display":"standalone"}' : 'self.addEventListener("fetch",()=>{})';
-            await ghApi(`/repos/${currentRepo}/contents/${currentDir?currentDir+'/':''}${name}`, { method: 'PUT', body: JSON.stringify({ message: `PWA Init ${name}`, content: btoa(content), branch: currentBranch }) });
-            showToast('Asset created!', 'success'); fetchFiles(currentDir);
+            const content = type === 'manifest' ? '{"name":"App"}' : 'self.addEventListener("fetch",()=>{})';
+            await ghApi(`/repos/${currentRepo}/contents/${currentDir?currentDir+'/':''}${name}`, { method: 'PUT', body: JSON.stringify({ message: `PWA ${name}`, content: btoa(content), branch: currentBranch }) });
+            showToast('Asset Generated!', 'success'); fetchFiles(currentDir);
         }
     </script>
 </body>
