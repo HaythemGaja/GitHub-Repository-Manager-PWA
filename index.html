@@ -2,12 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>GitRestore Studio - PWA & Repo Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Ace Editor -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.23.0/ace.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.23.0/ext-modelist.min.js"></script>
+    <!-- Marked for Markdown -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     <style>
         :root {
@@ -23,6 +25,10 @@
             overflow: hidden;
             height: 100vh;
             width: 100vw;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
         }
         .sidebar { background-color: var(--gh-sidebar); border-right: 1px solid var(--gh-border); }
         .btn-primary { background-color: #238636; transition: background 0.2s; }
@@ -31,9 +37,8 @@
         
         #editor { width: 100%; flex: 1; border: 1px solid var(--gh-border); border-radius: 4px; }
         
-        .drawer-base {
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
+        /* Responsive Hybrid Layout */
+        .drawer-base { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 
         @media (max-width: 1024px) {
             .mobile-drawer {
@@ -110,18 +115,25 @@
 
     <main class="flex flex-1 overflow-hidden relative">
         
+        <!-- Login View -->
         <div id="auth-view" class="flex-1 flex flex-col items-center justify-center p-6 bg-[#0d1117] z-[120]">
             <div class="card p-8 max-w-md w-full text-center shadow-2xl border-blue-500/20">
                 <i class="fas fa-key text-4xl mb-4 text-blue-500"></i>
                 <h2 class="text-2xl font-bold mb-2">Studio Session</h2>
-                <p class="text-gray-400 text-sm mb-6">Connect your GitHub Personal Access Token</p>
-                <input type="password" id="pat-token" placeholder="ghp_xxxxxxxxxxxx" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 mb-4 focus:border-blue-500 outline-none transition-all">
-                <button onclick="login()" class="btn-primary w-full py-3 rounded-lg font-bold text-white shadow-lg">AUTHENTICATE</button>
+                <p class="text-gray-400 text-sm mb-6">Enter Personal Access Token to persist session</p>
+                <input type="password" id="pat-token" placeholder="ghp_xxxxxxxxxxxx" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 mb-2 focus:border-blue-500 outline-none">
+                <div class="flex items-center gap-2 mb-4 justify-center">
+                    <input type="checkbox" id="remember-me" checked>
+                    <label for="remember-me" class="text-xs text-gray-400">Remember on this device</label>
+                </div>
+                <button onclick="login()" class="btn-primary w-full py-3 rounded-lg font-bold text-white shadow-lg uppercase">Connect</button>
             </div>
         </div>
 
+        <!-- Main Workspace -->
         <div id="dashboard-view" class="hidden flex-1 flex flex-row overflow-hidden w-full">
             
+            <!-- Sidebar: Repositories -->
             <aside id="repo-drawer" class="drawer-base mobile-drawer sidebar w-64 flex flex-col shrink-0 bg-[#161b22]">
                 <div class="p-4 border-b border-[#30363d] flex justify-between items-center bg-[#161b22]">
                     <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Repositories</span>
@@ -133,6 +145,7 @@
                 <div id="repo-list" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
             </aside>
 
+            <!-- File Explorer Sidebar -->
             <aside id="file-drawer" class="drawer-base mobile-drawer sidebar w-64 flex flex-col shrink-0 bg-[#161b22]">
                 <div class="p-4 border-b border-[#30363d] flex justify-between items-center bg-[#161b22]">
                     <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Explorer</span>
@@ -143,6 +156,7 @@
                 </div>
             </aside>
 
+            <!-- Workspace Panel -->
             <section class="flex-1 flex flex-col overflow-hidden bg-[#0d1117] min-w-0">
                 
                 <div id="repo-toolbar" class="hidden p-2 border-b border-[#30363d] flex justify-between items-center bg-[#161b22] shrink-0">
@@ -153,12 +167,12 @@
                         </div>
                     </div>
                     <div class="flex gap-1">
-                        <button onclick="toggleFileDrawer()" class="lg:hidden text-[10px] px-2 py-1 rounded bg-[#30363d] text-white">FILES</button>
-                        <button onclick="switchViewTab('pages')" class="text-[10px] px-2 py-1 rounded text-orange-400 font-bold"><i class="fas fa-rocket"></i></button>
+                        <button onclick="toggleFileDrawer()" class="lg:hidden text-[10px] px-2 py-1 rounded bg-[#30363d] text-white uppercase font-bold">Files</button>
+                        <button onclick="switchViewTab('pages')" class="text-[10px] px-2 py-1 rounded text-orange-400 font-bold uppercase"><i class="fas fa-rocket mr-1"></i>Pages</button>
                     </div>
                 </div>
 
-                <div class="flex-1 flex flex-row overflow-hidden relative" id="workspace-container">
+                <div class="flex-1 flex flex-row overflow-hidden relative">
                     
                     <div id="view-explorer" class="flex flex-1 overflow-hidden">
                         <div class="flex-1 flex flex-col overflow-hidden bg-[#0d1117] relative" id="editor-pane">
@@ -173,7 +187,7 @@
                                     <button onclick="closeFileView()" class="text-gray-500 p-1"><i class="fas fa-times"></i></button>
                                 </div>
                                 
-                                <div class="px-2 flex border-b border-[#30363d] gap-4 shrink-0 overflow-x-auto">
+                                <div class="px-2 flex border-b border-[#30363d] gap-4 shrink-0 overflow-x-auto bg-[#161b22]/20">
                                     <button onclick="switchEditorTab('edit')" id="etab-edit" class="py-2 text-[10px] font-bold tab-active">CODE</button>
                                     <button onclick="switchEditorTab('diff')" id="etab-diff" class="py-2 text-[10px] font-bold text-gray-500">DIFF</button>
                                     <button onclick="switchEditorTab('run')" id="etab-run" class="hidden py-2 text-[10px] font-bold text-green-500">RUN</button>
@@ -186,13 +200,12 @@
                                         <div id="editor"></div>
                                         <div id="commit-section" class="mt-2 hidden flex flex-col shrink-0 p-2 bg-[#161b22] border border-[#30363d] rounded-lg">
                                             <textarea id="commit-msg" rows="2" placeholder="Describe changes (optional)..." class="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-xs focus:border-blue-500 outline-none resize-none"></textarea>
-                                            <button onclick="saveChanges()" class="btn-primary w-full mt-2 py-2 rounded font-black text-[10px] text-white uppercase shadow-lg">PUSH TO GITHUB</button>
+                                            <button onclick="saveChanges()" class="btn-primary w-full mt-2 py-2 rounded font-black text-[10px] text-white uppercase shadow-lg">PUSH CHANGES</button>
                                         </div>
                                     </div>
 
                                     <div id="diff-container" class="hidden absolute inset-0 flex flex-col bg-[#0d1117] overflow-hidden p-2">
-                                        <div id="diff-mode-text" class="text-[9px] text-gray-500 uppercase font-black mb-2 opacity-50 px-1">Unsaved Changes</div>
-                                        <div class="flex-1 overflow-y-auto border border-[#30363d] rounded-md" id="diff-view"></div>
+                                        <div id="diff-view" class="flex-1 overflow-y-auto border border-[#30363d] rounded-md bg-[#0d1117]"></div>
                                     </div>
 
                                     <div id="run-container" class="hidden absolute inset-0 flex flex-col bg-white">
@@ -207,42 +220,38 @@
 
                             <div id="empty-editor-state" class="flex-1 flex flex-col items-center justify-center text-gray-700 opacity-20 select-none">
                                 <i class="fas fa-terminal text-8xl mb-6"></i>
-                                <p class="text-xs font-black uppercase tracking-widest text-center">Select a file to begin</p>
+                                <p class="text-xs font-black uppercase tracking-widest text-center">Open a repository to begin session</p>
                             </div>
                         </div>
-                    </div>
-
-                    <div id="view-issues" class="hidden absolute inset-0 bg-[#0d1117] p-4 overflow-y-auto z-40">
-                        <div id="issue-list" class="space-y-2 max-w-xl mx-auto"></div>
                     </div>
 
                     <div id="view-pages" class="hidden absolute inset-0 flex flex-col bg-[#0d1117] p-4 overflow-y-auto z-40">
                         <div class="max-w-xl mx-auto w-full space-y-6">
                             <div class="flex justify-between items-center mb-4">
-                                <h2 class="text-lg font-black uppercase tracking-tighter text-gray-400">Deployment</h2>
+                                <h2 class="text-lg font-black uppercase tracking-tighter text-gray-400">Deployment Console</h2>
                                 <button onclick="switchViewTab('explorer')" class="text-gray-500 text-xl"><i class="fas fa-times"></i></button>
                             </div>
                             
-                            <div id="pages-status-card" class="card p-6 border-blue-500/20 bg-blue-900/10 shadow-2xl">
-                                <div id="pages-status-text" class="text-sm font-bold mb-4 text-gray-300 italic">Detecting...</div>
+                            <div class="card p-6 border-blue-500/20 bg-blue-900/10 shadow-2xl">
+                                <div id="pages-status-text" class="text-sm font-bold mb-4 text-gray-300">Checking GitHub Pages...</div>
                                 <div id="pages-url-box" class="hidden">
                                     <div id="pages-url" class="bg-black/60 p-4 rounded-lg border border-[#30363d] text-blue-400 font-mono text-[12px] break-all mb-6"></div>
                                     <div class="grid grid-cols-2 gap-3">
-                                        <button onclick="window.open(document.getElementById('pages-url').textContent, '_blank')" class="bg-blue-600 text-white text-[11px] font-black py-3 rounded-lg uppercase shadow-xl">Launch</button>
-                                        <button onclick="copyToClipboard(document.getElementById('pages-url').textContent)" class="bg-[#21262d] text-gray-300 text-[11px] font-black py-3 rounded-lg border border-[#30363d] uppercase">Copy</button>
+                                        <button onclick="window.open(document.getElementById('pages-url').textContent, '_blank')" class="bg-blue-600 text-white text-[11px] font-black py-3 rounded-lg uppercase shadow-xl">Visit Live App</button>
+                                        <button onclick="copyToClipboard(document.getElementById('pages-url').textContent)" class="bg-[#21262d] text-gray-300 text-[11px] font-black py-3 rounded-lg border border-[#30363d] uppercase">Copy URL</button>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="card p-6">
-                                <h3 class="text-[11px] font-black mb-6 uppercase text-gray-500">Settings</h3>
+                                <h3 class="text-[11px] font-black mb-6 uppercase text-gray-500">Enable / Update Deployment</h3>
                                 <div class="space-y-6">
                                     <select id="pages-branch-select" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-sm outline-none"></select>
                                     <select id="pages-folder-select" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-sm outline-none">
                                         <option value="/">Root ( / )</option>
                                         <option value="/docs">Docs ( /docs )</option>
                                     </select>
-                                    <button id="pages-save-btn" onclick="savePagesConfig()" class="btn-primary w-full py-4 rounded-lg font-black text-xs text-white uppercase tracking-widest shadow-xl">Activate</button>
+                                    <button id="pages-save-btn" onclick="savePagesConfig()" class="btn-primary w-full py-4 rounded-lg font-black text-xs text-white uppercase tracking-widest shadow-xl">Deploy Site</button>
                                 </div>
                             </div>
                         </div>
@@ -252,41 +261,40 @@
         </div>
     </main>
 
-    <!-- Global Search -->
+    <!-- Global Modals -->
     <div id="global-search-overlay" class="fixed inset-0 modal-overlay hidden z-[200] p-4">
         <div class="w-full max-w-lg mx-auto card p-6 shadow-2xl mt-10 border-blue-500/30">
             <div class="flex items-center gap-3 border-b border-[#30363d] pb-4 mb-4">
-                <input type="text" id="global-search-input" onkeyup="if(event.key==='Enter') executeGlobalSearch()" placeholder="Search Repository..." class="flex-1 bg-transparent text-xl outline-none">
+                <input type="text" id="global-search-input" onkeyup="if(event.key==='Enter') executeGlobalSearch()" placeholder="Deep Search Code..." class="flex-1 bg-transparent text-xl outline-none border-none">
                 <button onclick="toggleGlobalSearch()"><i class="fas fa-times"></i></button>
             </div>
             <div id="search-results" class="max-h-[50vh] overflow-y-auto space-y-2"></div>
         </div>
     </div>
 
-    <!-- Simple Modals -->
     <div id="create-repo-modal" class="fixed inset-0 modal-overlay hidden items-center justify-center p-4 z-[210]">
         <div class="card p-6 max-w-sm w-full">
             <h3 class="text-sm font-black mb-4 uppercase text-gray-400">New Repository</h3>
-            <input type="text" id="new-repo-name" placeholder="name" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-sm mb-4 outline-none">
+            <input type="text" id="new-repo-name" placeholder="Repository name" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-sm mb-4 outline-none focus:border-blue-500">
             <button onclick="createRepo()" class="btn-primary w-full py-3 rounded-lg font-black text-xs text-white uppercase">Create</button>
         </div>
     </div>
 
     <div id="new-file-modal" class="fixed inset-0 modal-overlay hidden items-center justify-center p-4 z-[210]">
         <div class="card p-6 max-w-sm w-full">
-            <h3 class="text-sm font-black mb-4 uppercase text-gray-400">New File</h3>
-            <input type="text" id="new-filename" placeholder="index.html" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-sm mb-4 outline-none">
-            <button onclick="createFile()" class="btn-primary w-full py-3 rounded-lg font-black text-xs text-white uppercase">Create</button>
+            <h3 class="text-sm font-black mb-4 uppercase text-gray-400 text-center">New Project File</h3>
+            <input type="text" id="new-filename" placeholder="script.js" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-sm mb-4 outline-none focus:border-blue-500 text-center">
+            <button onclick="createFile()" class="btn-primary w-full py-3 rounded-lg font-black text-xs text-white uppercase">Initialize File</button>
         </div>
     </div>
 
     <div id="restore-modal" class="fixed inset-0 modal-overlay hidden items-center justify-center p-4 z-[210]">
-        <div class="card p-5 max-w-xs w-full text-center">
+        <div class="card p-6 max-w-xs w-full text-center">
             <h3 class="text-sm font-black mb-2 text-blue-400 uppercase tracking-widest">Restore</h3>
-            <p class="text-[10px] text-gray-500 mb-6 font-bold uppercase">Confirm rollback to this version?</p>
+            <p class="text-[10px] text-gray-500 mb-6 font-bold uppercase">Confirm Rollback?</p>
             <div class="grid grid-cols-2 gap-2">
-                <button onclick="hideModal('restore-modal')" class="text-xs text-gray-500 py-2">CANCEL</button>
-                <button id="confirm-restore-btn" class="bg-blue-600 text-white text-[10px] font-black rounded py-2">RESTORE</button>
+                <button onclick="hideModal('restore-modal')" class="text-xs text-gray-500 py-2 font-bold uppercase">Cancel</button>
+                <button id="confirm-restore-btn" class="bg-blue-600 text-white text-[10px] font-black rounded py-2 uppercase">Restore</button>
             </div>
         </div>
     </div>
@@ -329,9 +337,10 @@
                     wrap: true,
                     useWorker: false 
                 });
-            } catch (e) { console.error("Ace initialization error:", e); }
+            } catch (e) { console.error("Editor failure", e); }
 
-            const savedToken = sessionStorage.getItem('gh_token');
+            // CRITICAL: Check LOCALSTORAGE for persistent sessions
+            const savedToken = localStorage.getItem('gh_token');
             if (savedToken) {
                 token = savedToken;
                 validateAndInit();
@@ -354,20 +363,21 @@
             if (!container) return;
             const toast = document.createElement('div');
             const colors = { error: 'bg-red-600', success: 'bg-green-600', info: 'bg-blue-600' };
-            toast.className = `${colors[type]} text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 transition-all duration-500 transform text-[10px] font-black uppercase tracking-widest border border-white/10`;
+            toast.className = `${colors[type]} text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 transition-all duration-500 transform text-[10px] font-black uppercase tracking-widest border border-white/10 pointer-events-auto`;
             toast.innerHTML = `<i class="fas ${type==='error'?'fa-times-circle':'fa-info-circle'}"></i> <span>${message}</span>`;
             container.appendChild(toast);
-            setTimeout(() => { toast.classList.add('opacity-0', '-translate-y-4'); setTimeout(() => toast.remove(), 500); }, 3000);
+            setTimeout(() => { toast.classList.add('opacity-0', '-translate-y-4'); setTimeout(() => toast.remove(), 500); }, 3500);
         }
 
         function decodeBase64(b64) {
             if (!b64) return "";
             try {
-                const binaryString = atob(b64.replace(/\s/g, ''));
+                const cleaned = b64.replace(/\s/g, '');
+                const binaryString = atob(cleaned);
                 const bytes = new Uint8Array(binaryString.length);
                 for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
                 return new TextDecoder('utf-8').decode(bytes);
-            } catch (e) { return "Studio Error: Encoding problem."; }
+            } catch (e) { return "Studio Error: Encoding/Binary issue."; }
         }
 
         function toggleRepoDrawer() {
@@ -414,25 +424,37 @@
 
         async function login() {
             const input = ui('pat-token');
+            const remember = ui('remember-me')?.checked;
             token = input ? input.value.trim() : '';
             if (!token) return showToast('Token Required', 'error');
+            
+            // Persistent storage if requested
+            if (remember) localStorage.setItem('gh_token', token);
+            else sessionStorage.setItem('gh_token', token); // Fallback for session-only
+            
             validateAndInit();
         }
 
-        function logout() { sessionStorage.clear(); location.reload(); }
+        function logout() { 
+            localStorage.removeItem('gh_token'); 
+            sessionStorage.removeItem('gh_token'); 
+            location.reload(); 
+        }
 
         async function validateAndInit() {
             try {
                 const res = await ghApi('/user');
-                if (!res.ok) throw new Error('Token Rejected');
+                if (!res.ok) throw new Error('Unauthorized');
                 user = await res.json();
-                sessionStorage.setItem('gh_token', token);
                 safeSet('username', `@${user.login}`);
                 ui('header-actions')?.classList.remove('hidden');
                 ui('auth-view')?.classList.add('hidden');
                 ui('dashboard-view')?.classList.remove('hidden');
                 fetchRepos();
-            } catch (err) { showToast(err.message, 'error'); sessionStorage.clear(); }
+            } catch (err) { 
+                showToast('Authentication failed. Check PAT.', 'error'); 
+                localStorage.removeItem('gh_token'); 
+            }
         }
 
         async function fetchRepos() {
@@ -440,7 +462,7 @@
                 const res = await ghApi('/user/repos?sort=updated&per_page=100');
                 repos = await res.json();
                 renderRepos(repos);
-            } catch (err) { showToast('Connection failure', 'error'); }
+            } catch (err) { showToast('Connection Error', 'error'); }
         }
 
         function renderRepos(data) {
@@ -515,28 +537,33 @@
             switchViewTab('pages');
             const statusText = ui('pages-status-text');
             const urlBox = ui('pages-url-box');
-            if (statusText) statusText.textContent = "QUERYING GITHUB...";
-            urlBox?.classList.add('hidden');
+            const saveBtn = ui('pages-save-btn');
+            
+            if (statusText) statusText.textContent = "DETECTING SETTINGS...";
+            if (urlBox) urlBox.classList.add('hidden');
+            
             try {
                 const res = await ghApi(`/repos/${currentRepo}/pages`);
                 if (res.ok) {
                     const data = await res.json();
                     pagesConfigured = true;
-                    if (statusText) statusText.innerHTML = `<span class="text-green-500 font-black">ACTIVE</span> (${data.status})`;
+                    if (statusText) statusText.innerHTML = `<span class="text-green-500 font-black">DEPLOYED</span> <span class="text-gray-500 text-[10px] ml-1">(${data.status})</span>`;
                     safeSet('pages-url', data.html_url);
                     urlBox?.classList.remove('hidden');
+                    if (saveBtn) saveBtn.textContent = "UPDATE DEPLOYMENT";
                 } else {
                     pagesConfigured = false;
-                    if (statusText) statusText.innerHTML = `<span class="text-red-400">NOT ENABLED</span>`;
+                    if (statusText) statusText.innerHTML = `<span class="text-red-400 font-bold uppercase tracking-widest">Disabled</span>`;
+                    if (saveBtn) saveBtn.textContent = "ACTIVATE PAGES";
                 }
-            } catch (err) { if (statusText) statusText.textContent = "ERROR"; }
+            } catch (err) { if (statusText) statusText.textContent = "API Error"; }
         }
 
         async function savePagesConfig() {
             const branch = ui('pages-branch-select')?.value;
             const path = ui('pages-folder-select')?.value;
             if (!branch || !path) return;
-            showToast('Requesting deployment...');
+            showToast('Pushing config...');
             try {
                 const res = await ghApi(`/repos/${currentRepo}/pages`, {
                     method: pagesConfigured ? 'PUT' : 'POST',
@@ -565,13 +592,13 @@
                 let html = '';
                 if (path !== '') {
                     const parent = path.split('/').slice(0, -1).join('/');
-                    html += `<div onclick="fetchFiles('${parent}')" class="p-3 text-[9px] cursor-pointer text-blue-400 font-black border-b border-[#30363d] uppercase"><i class="fas fa-arrow-left mr-2"></i> Parent</div>`;
+                    html += `<div onclick="fetchFiles('${parent}')" class="p-3 text-[9px] cursor-pointer text-blue-400 font-black border-b border-[#30363d] uppercase bg-blue-400/5"><i class="fas fa-arrow-left mr-2"></i> Parent</div>`;
                 }
                 files.sort((a,b) => (a.type === 'dir' ? -1 : 1)).forEach(file => {
                     const icon = file.type === 'dir' ? 'fa-folder text-yellow-500' : 'fa-file-code text-blue-400';
                     html += `
-                        <div class="file-item p-3 text-[10px] cursor-pointer hover:bg-[#1f2937] flex justify-between group border-b border-[#30363d]">
-                            <span onclick="${file.type === 'dir' ? `fetchFiles('${file.path}')` : `openFile('${file.path}')`}" class="flex-1 truncate font-bold">
+                        <div class="file-item p-3 text-[10px] cursor-pointer hover:bg-[#1f2937] flex justify-between group border-b border-[#30363d] bg-[#161b22]">
+                            <span onclick="${file.type === 'dir' ? `fetchFiles('${file.path}')` : `openFile('${file.path}')`}" class="flex-1 truncate font-bold uppercase tracking-tight">
                                 <i class="fas ${icon} mr-3 w-4 text-center"></i> ${file.name}
                             </span>
                         </div>`;
@@ -585,7 +612,7 @@
             isEditMode = false;
             editor.setReadOnly(true);
             safeSet('edit-toggle-btn', 'EDIT');
-            ui('edit-toggle-btn')?.classList.replace('bg-red-600', 'bg-blue-600');
+            ui('edit-toggle-btn')?.classList.replace('bg-purple-600', 'bg-blue-600');
             ui('commit-section')?.classList.add('hidden');
             ui('empty-editor-state')?.classList.add('hidden');
             ui('file-details')?.classList.remove('hidden');
@@ -655,14 +682,14 @@
                     if (i < modLines.length) html += `<div class="diff-line diff-added">+ ${escapeHtml(mLine)}</div>`;
                 }
             }
-            diffView.innerHTML = html || '<div class="p-10 text-center text-gray-600 italic">No variations.</div>';
+            diffView.innerHTML = html || '<div class="p-10 text-center text-gray-600 italic">No variations detected.</div>';
         }
 
         function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
         async function saveChanges() {
-            const message = ui('commit-msg')?.value.trim() || `Updated ${activeFilePath}`;
-            showToast('Pushing to GitHub...');
+            const message = ui('commit-msg')?.value.trim() || `Update ${activeFilePath}`;
+            showToast('Pushing update...');
             try {
                 const res = await ghApi(`/repos/${currentRepo}/contents/${activeFilePath}`, {
                     method: 'PUT',
@@ -671,13 +698,13 @@
                 
                 const data = await res.json();
                 if (res.ok) { 
-                    showToast('Success!', 'success'); 
-                    currentFileSha = data.content.sha; // CRITICAL: Update local SHA to prevent rejection on next save
-                    currentFileData = editor.getValue(); // Update baseline for Diff
+                    showToast('Update Pushed!', 'success'); 
+                    currentFileSha = data.content.sha; // Update SHA for next edit
+                    currentFileData = editor.getValue(); 
                     safeSet('commit-msg', '', 'value'); 
                     toggleEditMode();
                 } else { 
-                    showToast(`Error: ${data.message}`, 'error'); 
+                    showToast(`Rejected: ${data.message}`, 'error'); 
                 }
             } catch (err) { showToast('Request failed.', 'error'); }
         }
@@ -686,14 +713,14 @@
             const q = ui('global-search-input')?.value.trim();
             const resEl = ui('search-results');
             if (!q || !resEl) return;
-            resEl.innerHTML = '<div class="p-4 text-center text-xs animate-pulse">Searching...</div>';
+            resEl.innerHTML = '<div class="p-4 text-center text-xs animate-pulse">Scanning Code...</div>';
             try {
                 const res = await ghApi(`/search/code?q=${encodeURIComponent(q)}+repo:${currentRepo}`);
                 const data = await res.json();
                 resEl.innerHTML = data.items.map(item => `
                     <div onclick="openFile('${item.path}'); toggleGlobalSearch();" class="card p-3 text-[10px] cursor-pointer mb-2 truncate border-[#30363d] font-bold text-blue-400">${item.path}</div>
                 `).join('') || '<div class="text-center p-10 opacity-30">No matches.</div>';
-            } catch (err) { resEl.innerHTML = 'Error searching.'; }
+            } catch (err) { resEl.innerHTML = 'Error.'; }
         }
 
         function toggleGlobalSearch() {
@@ -730,9 +757,9 @@
                     <div class="card p-3 flex flex-col gap-3 text-[9px] bg-[#161b22]">
                         <div class="truncate font-bold text-gray-200">${c.commit.message}</div>
                         <div class="flex gap-1">
-                            <button onclick="historicalAction('${c.sha}', 'diff')" class="flex-1 bg-blue-600/20 text-blue-400 py-2 rounded font-black uppercase">DIFF</button>
-                            <button onclick="historicalAction('${c.sha}', 'run')" class="flex-1 bg-purple-600/20 text-purple-400 py-2 rounded font-black uppercase">RUN</button>
-                            <button onclick="requestRestore('${c.sha}')" class="flex-1 bg-green-600/20 text-green-500 py-2 rounded font-black uppercase">RESTORE</button>
+                            <button onclick="historicalAction('${c.sha}', 'diff')" class="flex-1 bg-blue-600/20 text-blue-400 py-2 rounded font-black uppercase tracking-widest border border-blue-500/20">DIFF</button>
+                            <button onclick="historicalAction('${c.sha}', 'run')" class="flex-1 bg-purple-600/20 text-purple-400 py-2 rounded font-black uppercase tracking-widest border border-purple-500/20">RUN</button>
+                            <button onclick="requestRestore('${c.sha}')" class="flex-1 bg-green-600/20 text-green-500 py-2 rounded font-black uppercase tracking-widest border border-green-500/20">RESTORE</button>
                         </div>
                     </div>
                 `).join('') || 'None';
@@ -741,7 +768,7 @@
 
         async function historicalAction(sha, mode) {
             try {
-                showToast(`Fetching...`);
+                showToast(`Accessing Version...`);
                 const res = await ghApi(`/repos/${currentRepo}/contents/${activeFilePath}?ref=${sha}`);
                 const data = await res.json();
                 const content = decodeBase64(data.content || "");
@@ -753,7 +780,7 @@
                     safeSet('diff-mode-text', `Comparing historical commit ${sha.substring(0,7)}`);
                     renderDiff(content, currentFileData);
                 }
-            } catch (e) { showToast('Historical fetch failed', 'error'); }
+            } catch (e) { showToast('Fetch failed', 'error'); }
         }
 
         async function createFile() {
@@ -770,17 +797,6 @@
             if (res.ok) { hideModal('create-repo-modal'); fetchRepos(); closeDrawers(); }
         }
 
-        async function fetchIssues() {
-            const list = ui('issue-list');
-            if (!list) return;
-            list.innerHTML = '<div class="shimmer h-10 rounded"></div>';
-            try {
-                const res = await ghApi(`/repos/${currentRepo}/issues?state=open`);
-                const data = await res.json();
-                list.innerHTML = data.map(i => `<div class="card p-3 text-[10px] font-bold border-l-4 border-green-500"><i class="fas fa-exclamation-circle mr-2"></i>${i.title}</div>`).join('') || '<div class="text-center p-10 opacity-30">No issues.</div>';
-            } catch(e) {}
-        }
-
         function copyToClipboard(text) {
             const el = document.createElement('textarea');
             el.value = text;
@@ -788,7 +804,7 @@
             el.select();
             document.execCommand('copy');
             document.body.removeChild(el);
-            showToast('Copied to clipboard!', 'success');
+            showToast('URL Copied!', 'success');
         }
 
         function requestRestore(sha) {
@@ -802,7 +818,7 @@
                      const content = decodeBase64(data.content);
                      await ghApi(`/repos/${currentRepo}/contents/${activeFilePath}`, {
                          method: 'PUT',
-                         body: JSON.stringify({ message: 'History Rollback', content: btoa(unescape(encodeURIComponent(content))), sha: currentFileSha, branch: currentBranch })
+                         body: JSON.stringify({ message: 'Historical restore', content: btoa(unescape(encodeURIComponent(content))), sha: currentFileSha, branch: currentBranch })
                      });
                      showToast('Restored!', 'success'); openFile(activeFilePath); hideModal('restore-modal');
                  } catch (err) { showToast('Restore Error', 'error'); }
